@@ -1,25 +1,22 @@
-// src/app/api/auth/register/route.ts
 import connectDB from "@/lib/databaseConnection";
 import { zSchema } from "@/lib/zodSchema";
-import { SignJWT } from "jose";
-import { catchError, response } from "@/lib/helpherfunction";
+import { catchError, generateOTP, response } from "@/lib/helpherfunction";
 import bcrypt from "bcrypt";
 import UserModel from "@/models/user.model";
+import OTPModel from "@/models/Otp.model";
 import { sendMail } from "@/lib/sendMail";
-import { emailVerificationLink } from "@/email/emailVerification";
+import { otpEmail } from "@/email/otpEmail";
 
 export async function POST(request: Request) {
   try {
-    // 1. Connect to database
     await connectDB();
 
-    // 2. Validate incoming data
+    // Validate input
     const validationSchema = zSchema.pick({
       name: true,
       email: true,
       password: true,
     });
-
     const payload = await request.json();
     const validateData = validationSchema.safeParse(payload);
 
@@ -30,50 +27,48 @@ export async function POST(request: Request) {
 
     const { name, email, password } = validateData.data;
 
-    // 3. Check if user already exists
+    // Check if user exists
     const checkUser = await UserModel.exists({ email });
     if (checkUser) {
       return response(false, 409, "User already registered");
     }
 
-    // 4. Hash password
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 5. Create new user
-    const NewRegistration = new UserModel({
+    // Create new user
+    const newUser = new UserModel({
       name,
       email,
       password: hashedPassword,
     });
+    await newUser.save();
 
-    await NewRegistration.save();
+    // Remove old OTPs (if any)
+    await OTPModel.deleteMany({ email });
 
-    // 6. Check SECRET_KEY
-    const secretKey = process.env.SECRET_KEY;
-    if (!secretKey || secretKey.length === 0) {
-      return response(false, 500, "Server misconfiguration: SECRET_KEY is missing");
-    }
+    // Generate & save new OTP
+    const otp = generateOTP();
+    const newOtpData = new OTPModel({ email, otp });
+    await newOtpData.save();
 
-    const secret = new TextEncoder().encode(secretKey);
-
-    // 7. Generate JWT for email verification
-    const token = await new SignJWT({ userId: NewRegistration._id })
-      .setIssuedAt()
-      .setExpirationTime("1d")
-      .setProtectedHeader({ alg: "HS256" })
-      .sign(secret);
-
-    const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/verify-email/${token}`;
-
-    // 8. Send verification email
-    await sendMail(
-      "Email verification request from Developer Khemsang",
-      email,
-      emailVerificationLink(verificationUrl)
+    // Send OTP email
+    const mailStatus = await sendMail(
+      "Your registration verification code", // subject
+      email,                                 // recipient
+      otpEmail(otp)                           // html body
     );
 
-    // 9. Return success response
-    return response(true, 200, "Registration success, please verify your email address");
+    if (!mailStatus.success) {
+      return response(false, 500, "Failed to send OTP email");
+    }
+
+    return response(
+      true,
+      200,
+      "Registration successful, OTP sent to your email",
+      { userId: newUser._id.toString() }
+    );
   } catch (error) {
     return catchError(error, "Registration failed");
   }
