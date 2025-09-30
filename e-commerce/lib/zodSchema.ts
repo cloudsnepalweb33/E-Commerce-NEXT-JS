@@ -19,4 +19,8 @@ export const zSchema = z.object({
     .min(2, "Name must be at least 2 characters")
     .max(50, "Name must be less than 50 characters"),
 
+    otp: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "OTP must be exactly 6 digits")
 });

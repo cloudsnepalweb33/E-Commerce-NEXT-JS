@@ -15,6 +15,7 @@ import ButtonLoading from "@/components/Application/ButtonLoading";
 import Link from "next/link";
 import { WEBSITE_REGISTER } from "@/routes/WebsiteRoute";
 import { showToast } from "@/lib/showTost";
+import OtpVerification from "@/components/Application/OtpVerification";
 
 interface LoginResponse {
   success: boolean;
@@ -25,6 +26,9 @@ interface LoginResponse {
 const Login = () => {
   const [loading, setLoading] = useState(false);
   const [isTypingPassword, setIsPassword] = useState(true);
+  const [otpEmail, setOtpEmail] = useState<string | null>(null);
+  const [otpVerificationLoading, setOtpVerificationLoading] = useState(false);
+
 
   const formSchema = zSchema.pick({ email: true }).extend({
     password: z.string().min(3, "Password field is required"),
@@ -43,11 +47,14 @@ const Login = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
+
       const data: LoginResponse = await res.json();
+
       if (data.success && data.token) {
         localStorage.setItem("token", data.token);
         showToast("success", data.message || "Login successful!");
-        window.location.href = "/dashboard";
+        setOtpEmail(values.email); 
+        form.reset();
       } else {
         showToast("error", data.message || "Login failed");
       }
@@ -58,58 +65,89 @@ const Login = () => {
     }
   };
 
+
+  const handleOtpVerification = async () =>{
+    alert("Hello")
+  }
   return (
     <Card className="w-[430px]">
       <CardContent>
         <div className="flex justify-center">
           <Image src={Logo} alt="Logo" width={150} height={50} className="max-w-[150px]" />
         </div>
-        <div className="text-center mb-5">
-          <h1 className="text-2xl font-extrabold">Login Into Account</h1>
-          <p>Login into your account by filling out the form below.</p>
-        </div>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleLoginSubmit)}>
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem className="mb-3">
-                  <FormLabel>Email</FormLabel>
-                  <FormControl><Input type="email" placeholder="example@gmail.com" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem className="mb-3">
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input type={isTypingPassword ? "password" : "text"} placeholder="********" {...field} />
-                      <button type="button" onClick={() => setIsPassword(!isTypingPassword)} className="absolute inset-y-0 right-3 flex items-center text-gray-500">
-                        {isTypingPassword ? <FaRegEyeSlash /> : <FaRegEye />}
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="mt-4">
-              <ButtonLoading type="submit" text="Login" loading={loading} className="w-full cursor-pointer" />
-            </div>
-            <div className="text-center mt-3">
-              <div className="flex justify-center gap-2">
-                <p>Don't have account?</p>
-                <Link href={WEBSITE_REGISTER} className="text-primary underline">Create account!</Link>
+
+        <div>
+          {!otpEmail ? 
+            <>
+              <div className="text-center mb-5">
+                <h1 className="text-2xl font-extrabold">Login Into Account</h1>
+                <p>Login into your account by filling out the form below.</p>
               </div>
-            </div>
-          </form>
-        </Form>
+           <div className="mt-5">
+               <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleLoginSubmit)}>
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem className="mb-3">
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="example@gmail.com" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem className="mb-3">
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input type={isTypingPassword ? "password" : "text"} placeholder="********" {...field} />
+                            <button
+                              type="button"
+                              onClick={() => setIsPassword(!isTypingPassword)}
+                              className="absolute inset-y-0 right-3 flex items-center text-gray-500"
+                            >
+                              {isTypingPassword ? <FaRegEyeSlash /> : <FaRegEye />}
+                            </button>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="mt-4">
+                    <ButtonLoading type="submit" text="Login" loading={loading} className="w-full cursor-pointer" />
+                  </div>
+
+                  <div className="text-center mt-3">
+                    <div className="flex justify-center gap-2">
+                      <p>Don't have account?</p>
+                      <Link href={WEBSITE_REGISTER} className="text-primary underline">
+                        Create account!
+                      </Link>
+                    </div>
+                    
+                  </div>
+                </form>
+              </Form>
+           </div>
+            </>
+           : 
+
+           <>
+           <OtpVerification email = {otpEmail} loading={otpVerificationLoading} onSubmit={handleOtpVerification}/>
+           </>
+           
+          }
+        </div>
       </CardContent>
     </Card>
   );
