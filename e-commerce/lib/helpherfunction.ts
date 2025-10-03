@@ -20,31 +20,30 @@ interface CustomError extends Error {
 }
 
 export const catchError = (error: CustomError, customMessage?: string) => {
+  console.error("❌ Error caught:", error);
+
+  let message = error.message;
+
   if (error.code === 11000 && error.keyPattern) {
     const keys = Object.keys(error.keyPattern).join(", ");
-    error.message = `Duplicate field(s): ${keys}. These field values must be unique.`;
-  }
-
-  let errorData: Record<string, unknown>;
-
-  if (process.env.NODE_ENV === "development") {
-    errorData = {
-      message: error.message,
-      error,
-    };
-  } else {
-    errorData = {
-      message: customMessage || "Internal server error.",
-    };
+    message = `Duplicate field(s): ${keys}. These field values must be unique.`;
   }
 
   const statusCode = typeof error.code === "number" ? error.code : 500;
 
-  return response(false, statusCode, error.message, errorData);
+  const errorData: Record<string, unknown> =
+    process.env.NODE_ENV === "development"
+      ? { message, stack: error.stack }
+      : { message: customMessage || "Internal server error." };
+
+  return response(false, statusCode, message, errorData);
 };
 
-export const generateOTP = () => {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  console.log("Generated OTP:", otp);
+// OTP generator
+export const generateOTP = (length = 6): string => {
+  const min = 10 ** (length - 1);
+  const max = 10 ** length - 1;
+  const otp = Math.floor(Math.random() * (max - min + 1) + min).toString();
+  console.log("🔑 Generated OTP:", otp);
   return otp;
 };

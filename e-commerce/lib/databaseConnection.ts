@@ -22,6 +22,7 @@ export async function connectDB(): Promise<Mongoose> {
   if (cached.conn) return cached.conn;
 
   if (!cached.promise) {
+    console.log("📡 Connecting MongoDB...");
     cached.promise = mongoose.connect(MONGODB_URI, {
       dbName: "e-commerce",
     });
@@ -29,8 +30,10 @@ export async function connectDB(): Promise<Mongoose> {
 
   try {
     cached.conn = await cached.promise;
+    console.log("✅ MongoDB connected successfully");
   } catch (e) {
     cached.promise = null;
+    console.error("❌ MongoDB connection failed", e);
     throw e;
   }
 

@@ -70,8 +70,10 @@ const userSchema = new mongoose.Schema<IUser>(
   { timestamps: true }
 );
 
+// Pre-save hashing
 userSchema.pre<IUser>("save", async function (next) {
   if (!this.isModified("password")) return next();
+  console.log("🔒 Hashing password before save...");
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
@@ -79,6 +81,7 @@ userSchema.pre<IUser>("save", async function (next) {
 userSchema.methods.comparePassword = async function (
   candidatePassword: string
 ): Promise<boolean> {
+  console.log("🔍 Comparing password...");
   return bcrypt.compare(candidatePassword, this.password);
 };
 

@@ -2,7 +2,6 @@ import connectDB from "@/lib/databaseConnection";
 import { zSchema } from "@/lib/zodSchema";
 import { SignJWT } from "jose";
 import { catchError, generateOTP, response } from "@/lib/helpherfunction";
-import bcrypt from "bcrypt";
 import UserModel from "@/models/user.model";
 import OTPModel from "@/models/Otp.model";
 import { sendMail } from "@/lib/sendMail";
@@ -10,56 +9,68 @@ import { otpEmail } from "@/email/otpEmail";
 
 export async function POST(request: Request) {
   try {
+    // 1️⃣ Connect to database
     await connectDB();
 
-    const validationSchema = zSchema.pick({ email: true, password: true });
+    // 2️⃣ Parse request body
     const payload = await request.json();
-    const validateData = validationSchema.safeParse(payload);
+    const validateData = zSchema.pick({ email: true, password: true }).safeParse(payload);
 
     if (!validateData.success) {
       const errors = validateData.error.errors.map(err => err.message);
       return response(false, 400, "Invalid input", { errors });
     }
 
-    const { email, password } = validateData.data;
+    const emailInput = validateData.data.email.trim().toLowerCase();
+    const passwordInput = validateData.data.password.trim();
 
-    const user = await UserModel.findOne({ deletedAt: null, email }).select("+password");
-    if (!user) return response(false, 401, "Invalid email or password");
-    if (!user.isVerified) return response(false, 403, "Please verify your email before login");
+    console.log("👤 Login attempt for:", emailInput);
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return response(false, 401, "Invalid email or password");
+    // 3️⃣ Find user
+    const user = await UserModel.findOne({ email: emailInput }).select("+password");
+    if (!user) {
+      console.log("❌ No user found with email:", emailInput);
+      return response(false, 401, "ईमेल वा पासवर्ड मिलेन");
+    }
 
+    // 4️⃣ Compare password
+    const isMatch = await user.comparePassword(passwordInput);
+    console.log("🔑 Password match:", isMatch);
+    if (!isMatch) return response(false, 401, "पासवर्ड मिलेन");
+
+    // 5️⃣ Remove old OTPs
+    await OTPModel.deleteMany({ email: emailInput });
+
+    // 6️⃣ Generate new OTP and save
+    const otp = generateOTP();
+    const newOtpData = new OTPModel({ email: emailInput, otp });
+    await newOtpData.save();
+
+    // 7️⃣ Send OTP via email
+    const otpEmailStatus = await sendMail("Login OTP", emailInput, otpEmail(otp));
+    if (!otpEmailStatus.success) {
+      console.log("❌ OTP sending failed for:", emailInput);
+      return response(false, 400, "OTP पठाउन असफल");
+    }
+
+    // 8️⃣ Generate temporary token (10 min)
     const secretKey = process.env.SECRET_KEY;
-    if (!secretKey) return response(false, 500, "Server misconfiguration: SECRET_KEY is missing");
+    if (!secretKey) return response(false, 500, "Server misconfiguration: SECRET_KEY छैन");
 
     const secret = new TextEncoder().encode(secretKey);
-
-    const token = await new SignJWT({
-      userId: user._id.toString(),
-      isAdmin: user.isAdmin || false,
-    })
+    const token = await new SignJWT({ email: emailInput, otpSent: true })
       .setIssuedAt()
-      .setExpirationTime("7d")
+      .setExpirationTime("10m")
       .setProtectedHeader({ alg: "HS256" })
       .sign(secret);
 
-    await OTPModel.deleteMany({ email });
+    console.log("✅ OTP sent successfully for:", emailInput);
 
-    const otp = generateOTP();
-    const newOtpData = new OTPModel({ email, otp });
-    await newOtpData.save();
+    // 9️⃣ Return success response
+    return response(true, 200, "OTP सफलतापूर्वक पठाइयो", { token });
 
-    const otpEmailStatus = await sendMail(
-      "Your login verification code",
-      email,
-      otpEmail(otp)
-    );
-
-    if (!otpEmailStatus.success) return response(false, 400, "Failed to send OTP");
-
-    return response(true, 200, "OTP sent successfully", { token });
   } catch (error) {
-    return catchError(error, "Login failed");
+    console.error("⚠️ Login API error:", error);
+    return catchError(error, "Login असफल भयो");
   }
 }
