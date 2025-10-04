@@ -22,7 +22,7 @@ import Link from "next/link";
 import {
   WEBSITE_REGISTER,
   WEBSITE_OTP,
-  WEBSITE_RESET_PASSWORD,
+  WEBSITE_FORGOT_PASSWORD,
 } from "@/routes/WebsiteRoute";
 import { showToast } from "@/lib/showTost";
 import { useRouter } from "next/navigation";
@@ -138,14 +138,14 @@ const Login = () => {
                 )}
               />
 
-              <div className="flex justify-end mb-2">
+              {/* <div className="flex justify-end mb-2">
                 <Link
                   href={WEBSITE_RESET_PASSWORD}
                   className="text-sm text-primary underline"
                 >
                   Forgot Password?
                 </Link>
-              </div>
+              </div> */}
 
               <div className="mt-4">
                 <ButtonLoading
@@ -170,7 +170,7 @@ const Login = () => {
                   <button
                     type="button"
                     className="text-sm text-primary underline"
-                    onClick={() => router.push(WEBSITE_RESET_PASSWORD)}
+                    onClick={() => router.push(WEBSITE_FORGOT_PASSWORD)}
                   >
                     Forgot Password?
                   </button>
