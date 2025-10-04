@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { showToast } from "@/lib/showTost";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -10,18 +11,19 @@ export default function ForgotPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    if (!email) return showToast("Email required", "error");
 
+    setLoading(true);
     try {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-
       const data = await res.json();
       showToast(data.message, data.success ? "success" : "error");
-    } catch {
+    } catch (err) {
+      console.error(err);
       showToast("Something went wrong", "error");
     } finally {
       setLoading(false);
@@ -29,7 +31,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-sm mx-auto mt-10">
+    <form onSubmit={handleSubmit} className="max-w-sm mx-auto mt-10 flex flex-col gap-4">
       <Input
         type="email"
         placeholder="Enter your email"
@@ -37,13 +39,9 @@ export default function ForgotPasswordPage() {
         onChange={(e) => setEmail(e.target.value)}
         required
       />
-      <button
-        type="submit"
-        disabled={loading}
-        className="bg-blue-500 text-white py-2 px-4 rounded disabled:opacity-50"
-      >
+      <Button type="submit" disabled={loading}>
         {loading ? "Sending..." : "Send Reset Link"}
-      </button>
+      </Button>
     </form>
   );
 }

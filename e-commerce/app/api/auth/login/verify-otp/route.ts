@@ -1,3 +1,4 @@
+
 import connectDB from "@/lib/databaseConnection";
 import { response, catchError } from "@/lib/helpherfunction";
 import OTPModel from "@/models/Otp.model";
@@ -9,11 +10,11 @@ export async function POST(request: Request) {
     await connectDB();
 
     const { email, otp } = await request.json();
-    if (!email || !otp) return response(false, 400, "Email and OTP required");
+    if (!email || !otp) return response(false, 400, "Email र OTP आवश्यक छ");
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // ✅ Check OTP validity
+    // OTP check
     const otpData = await OTPModel.findOne({
       email: normalizedEmail,
       otp,
@@ -22,10 +23,10 @@ export async function POST(request: Request) {
 
     if (!otpData) return response(false, 400, "OTP गलत छ वा expire भइसकेको छ");
 
-    // OTP valid -> remove all OTPs for that email
+    // Remove all OTPs for email
     await OTPModel.deleteMany({ email: normalizedEmail });
 
-    // ✅ Generate temporary token (valid 15 minutes)
+    // Generate temporary token (15 minutes)
     const secretKey = process.env.SECRET_KEY;
     if (!secretKey) return response(false, 500, "SECRET_KEY missing");
 
@@ -33,10 +34,10 @@ export async function POST(request: Request) {
     const tempToken = await new SignJWT({ email: normalizedEmail })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
-      .setExpirationTime("15m") // 15 minutes validity
+      .setExpirationTime("15m")
       .sign(secret);
 
-    // Optional: mark user email verified
+    // Mark email verified
     await UserModel.updateOne({ email: normalizedEmail }, { isEmailVerified: true });
 
     return response(true, 200, "OTP verified successfully", { tempToken });
