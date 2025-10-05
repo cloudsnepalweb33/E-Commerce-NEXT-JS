@@ -27,6 +27,8 @@ import {
 import { showToast } from "@/lib/showTost";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
+import { useDispatch } from "react-redux";
+import { login } from "@/store/reducer/authReducer";
 
 interface LoginResponse {
   success: boolean;
@@ -34,12 +36,13 @@ interface LoginResponse {
   data?: { token: string };
 }
 
-const Login = () => {
+const Login: React.FC = () => {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [isTypingPassword, setIsPassword] = useState(true);
+  const dispatch = useDispatch();
 
-  // Form schema
+  const [loading, setLoading] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
   const formSchema = zSchema.pick({ email: true }).extend({
     password: z.string().min(3, "Password field is required"),
   });
@@ -52,7 +55,7 @@ const Login = () => {
   const handleLoginSubmit = async (values: z.infer<typeof formSchema>) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
@@ -60,18 +63,28 @@ const Login = () => {
 
       const data: LoginResponse = await res
         .json()
-        .catch(() => ({ message: "Server error" }));
+        .catch(() => ({ success: false, message: "Server error" }));
 
-      if (!res.ok) throw new Error(data.message || "Network error");
+      if (!data.success) {
+        showToast("error", data.message || "Invalid credentials!");
+        return;
+      }
 
-      showToast("success", data.message);
+      if (!data.data?.token) {
+        showToast("error", "No token returned from server");
+        return;
+      }
+
+      // store temporary data for OTP verification
       localStorage.setItem("otpEmail", values.email);
-      localStorage.setItem("tempToken", data.data!.token);
+      localStorage.setItem("tempToken", data.data.token);
+
+      showToast("success", data.message || "OTP sent successfully!");
       form.reset();
 
       router.push(WEBSITE_OTP);
     } catch (err: any) {
-      console.error(err);
+      console.error("Login error:", err);
       showToast("error", err.message || "Network error. Please try again.");
     } finally {
       setLoading(false);
@@ -85,100 +98,81 @@ const Login = () => {
           <Image src={Logo} alt="Logo" width={150} height={50} />
         </div>
 
-        <div>
-          <div className="text-center mb-5">
-            <h1 className="text-2xl font-extrabold">Login Into Account</h1>
-            <p>Login into your account by filling out the form below.</p>
-          </div>
+        <div className="text-center mb-5">
+          <h1 className="text-2xl font-extrabold">Login Into Account</h1>
+          <p>Login into your account by filling out the form below.</p>
+        </div>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleLoginSubmit)}>
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem className="mb-3">
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleLoginSubmit)}>
+            {/* Email Field */}
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem className="mb-3">
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="example@gmail.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Password Field */}
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem className="mb-3">
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <div className="relative">
                       <Input
-                        type="email"
-                        placeholder="example@gmail.com"
+                        type={isPasswordVisible ? "text" : "password"}
+                        placeholder="********"
                         {...field}
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <button
+                        type="button"
+                        onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                        className="absolute inset-y-0 right-3 flex items-center text-gray-500"
+                      >
+                        {isPasswordVisible ? <FaRegEye /> : <FaRegEyeSlash />}
+                      </button>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem className="mb-3">
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          type={isTypingPassword ? "password" : "text"}
-                          placeholder="********"
-                          {...field}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setIsPassword(!isTypingPassword)}
-                          className="absolute inset-y-0 right-3 flex items-center text-gray-500"
-                        >
-                          {isTypingPassword ? <FaRegEyeSlash /> : <FaRegEye />}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Submit Button */}
+            <div className="mt-6">
+              <ButtonLoading type="submit" text="Login" loading={loading} className="w-full" />
+            </div>
 
-              {/* <div className="flex justify-end mb-2">
-                <Link
-                  href={WEBSITE_RESET_PASSWORD}
+            {/* Bottom Links */}
+            <div className="text-center mt-3">
+              <div className="flex justify-center gap-2">
+                <p>Don't have an account?</p>
+                <Link href={WEBSITE_REGISTER} className="text-primary underline">
+                  Create account!
+                </Link>
+              </div>
+              <div className="flex justify-center mb-2 mt-4">
+                <button
+                  type="button"
                   className="text-sm text-primary underline"
+                  onClick={() => router.push(WEBSITE_FORGOT_PASSWORD)}
                 >
                   Forgot Password?
-                </Link>
-              </div> */}
-
-              <div className="mt-4">
-                <ButtonLoading
-                  type="submit"
-                  text="Login"
-                  loading={loading}
-                  className="w-full"
-                />
+                </button>
               </div>
-
-              <div className="text-center mt-3">
-                <div className="flex justify-center gap-2">
-                  <p>Don't have an account?</p>
-                  <Link
-                    href={WEBSITE_REGISTER}
-                    className="text-primary underline"
-                  >
-                    Create account!
-                  </Link>
-                </div>
-                <div className="flex justify-end mb-2">
-                  <button
-                    type="button"
-                    className="text-sm text-primary underline"
-                    onClick={() => router.push(WEBSITE_FORGOT_PASSWORD)}
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-              </div>
-            </form>
-          </Form>
-        </div>
+            </div>
+          </form>
+        </Form>
       </CardContent>
     </Card>
   );

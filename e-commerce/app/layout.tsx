@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import { ToastContainer } from 'react-toastify';
+import GlobalProvider from "@/components/Application/GlobalProvider";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -18,8 +19,12 @@ export default function RootLayout({
       <body
         
       >
+        <GlobalProvider>
+
         <ToastContainer/>
         {children}
+
+        </GlobalProvider>
       </body>
     </html>
   );

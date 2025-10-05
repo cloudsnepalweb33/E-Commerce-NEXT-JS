@@ -1,48 +1,53 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import OtpVerificationForm from "@/components/Application/otpVerification/otpVerification";
 import { showToast } from "@/lib/showTost";
+import { USER_DASHBOARD } from "@/routes/WebsiteRoute";
+import { ADMIN_DASHBOARD } from "@/routes/AdminPanelRoutes";
 
 export default function OtpVerificationPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState<string | null>(null);
   const [tempToken, setTempToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [checkingStorage, setCheckingStorage] = useState(true); // prevent flicker
+  const [checkingStorage, setCheckingStorage] = useState(true);
 
-  // Load email and tempToken from localStorage
+  // Load email & token from localStorage
   useEffect(() => {
     const storedEmail = localStorage.getItem("otpEmail");
     const storedToken = localStorage.getItem("tempToken");
 
     if (!storedEmail || !storedToken) {
-      router.push("/login"); // redirect if missing
+      router.push("/login");
       return;
     }
 
     setEmail(storedEmail);
     setTempToken(storedToken);
-    setCheckingStorage(false); // done checking
+    setCheckingStorage(false);
   }, [router]);
 
-  // Resend OTP countdown
+  // Resend timer countdown
   useEffect(() => {
     if (resendTimer <= 0) return;
     const interval = setInterval(() => setResendTimer((prev) => prev - 1), 1000);
     return () => clearInterval(interval);
   }, [resendTimer]);
 
+  // Submit OTP
   const handleSubmit = async (values: { otp: string }) => {
-    if (!email || !tempToken) return; 
+    if (!email || !tempToken) return;
 
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/login/verify-otp`, {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+      const res = await fetch(`${baseUrl}/api/auth/login/verify-otp`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -51,20 +56,55 @@ export default function OtpVerificationPage() {
         body: JSON.stringify({ email, otp: values.otp }),
       });
 
-      if (!res.ok) throw new Error("Network error");
-
       const data = await res.json();
 
-      if (data.success) {
-        if (data.token) localStorage.setItem("authToken", data.token);
-        showToast("success", data.message || "OTP verified successfully!");
-        router.push("/dashboard");
-      } else {
-        showToast("error", data.message || "Invalid OTP. Please try again.");
+      // 🔹 Console logs for debugging
+      console.log("✅ OTP verify full response:", data);
+
+      if (!res.ok || !data.success) {
+        showToast("error", data.message || "OTP गलत छ वा expire भइसकेको छ");
+        return;
       }
+
+      // Save permanent auth token
+      if (data.token) {
+        localStorage.setItem("authToken", data.token);
+        console.log("Saved authToken in localStorage:", data.token);
+      }
+
+      // Extract role safely
+      const role =
+        data?.data?.role ||
+        data?.data?.user?.role ||
+        data?.role ||
+        "user"; // fallback
+
+      console.log("Final role used for redirect:", role);
+
+      showToast("success", data.message || "OTP verified successfully!");
+
+      // Redirect based on callback or role
+      setTimeout(() => {
+        if (searchParams.has("callback")) {
+          console.log("Redirecting to callback:", searchParams.get("callback"));
+          router.push(searchParams.get("callback")!);
+        } else if (role.toLowerCase() === "admin") {
+          console.log("Redirecting to admin dashboard:", ADMIN_DASHBOARD);
+          router.push(ADMIN_DASHBOARD);
+        } else {
+          console.log("Redirecting to user dashboard:", USER_DASHBOARD);
+          router.push(USER_DASHBOARD);
+        }
+      }, 150);
+
+      // Cleanup
+      localStorage.removeItem("otpEmail");
+      localStorage.removeItem("tempToken");
+      console.log("Cleaned otpEmail and tempToken from localStorage");
+
     } catch (err) {
-      console.error("Error verifying OTP:", err);
-      showToast("error", "Network error. Please try again.");
+      console.error("❌ Error verifying OTP:", err);
+      showToast("error", "Network error. कृपया पुन: प्रयास गर्नुहोस्।");
     } finally {
       setLoading(false);
     }
@@ -76,25 +116,25 @@ export default function OtpVerificationPage() {
 
     setResendLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/login/resend-otp`, {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+      const res = await fetch(`${baseUrl}/api/auth/login/resend-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
 
-      if (!res.ok) throw new Error("Failed to resend OTP");
-
       const data = await res.json();
+      console.log("Resend OTP response:", data);
 
       if (data.success) {
-        showToast("success", data.message || "OTP resent successfully!");
+        showToast("success", data.message || "OTP पुन: पठाइयो!");
         setResendTimer(30);
       } else {
-        showToast("error", data.message || "Failed to resend OTP");
+        showToast("error", data.message || "OTP पठाउन असफल भयो।");
       }
     } catch (err) {
-      console.error("Error resending OTP:", err);
-      showToast("error", "Network error. Try again later.");
+      console.error("❌ Error resending OTP:", err);
+      showToast("error", "Network error. पुन: प्रयास गर्नुहोस्।");
     } finally {
       setResendLoading(false);
     }
@@ -110,7 +150,11 @@ export default function OtpVerificationPage() {
           Enter the OTP sent to <span className="font-medium">{email}</span>
         </p>
 
-        <OtpVerificationForm email={email!} onSubmit={handleSubmit} loading={loading} />
+        <OtpVerificationForm
+          email={email!}
+          onSubmit={handleSubmit}
+          loading={loading}
+        />
 
         <div className="mt-4 text-center">
           <button
